@@ -1,15 +1,15 @@
 #include<bits/stdc++.h>
 using namespace std;
 
-void main(){
+int main(){
   int choice;
   while (1){
-    cout <<"Enter your choice";
-    cout <<"1. Add a word";
-    cout <<"2. Search a word";
-    cout <<"3. delete a word";
-    cout <<"4. Show words starting from a letter ";
-    cout <<"5. Show all words";
+    cout <<"Enter your choice"<<endl;
+    cout <<"1. Add a word"<<endl;
+    cout <<"2. Search a word"<<endl;
+    cout <<"3. delete a word"<<endl;
+    cout <<"4. Show words starting from a letter"<<endl;
+    cout <<"5. Show all words"<<endl;
     cin>> choice;
     switch(choice){
       case 1:
