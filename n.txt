@@ -1,0 +1,10 @@
+Name - A word identifying a person or thing.
+Night - Time of darkness.
+New - Recently created or discovered.
+Near - Close by.
+Need - Require something.
+Never - At no time.
+Number - A value used for counting.
+Nice - Pleasant or good.
+Nothing - No thing.
+Nature - The physical world and living things.
