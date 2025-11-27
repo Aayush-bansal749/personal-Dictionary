@@ -1,20 +1,109 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+/* ------------------ HUFFMAN CODING ------------------ */
+
+struct HuffNode {
+    char ch;
+    int freq;
+    HuffNode *left, *right;
+    HuffNode(char c, int f) : ch(c), freq(f), left(nullptr), right(nullptr) {}
+};
+
+struct HuffCmp {
+    bool operator()(HuffNode* a, HuffNode* b) {
+        return a->freq > b->freq;
+    }
+};
+
+HuffNode* huffRoot = nullptr;
+unordered_map<char, string> huffCode;   // char -> bitstring
+
+void buildCodeTable(HuffNode* node, const string &path) {
+    if (!node) return;
+    if (!node->left && !node->right) {
+        // leaf
+        huffCode[node->ch] = path.empty() ? "0" : path; // handle single-char case
+        return;
+    }
+    buildCodeTable(node->left,  path + "0");
+    buildCodeTable(node->right, path + "1");
+}
+
+void buildHuffman(const string &corpus) {
+    if (corpus.empty()) {
+        huffRoot = nullptr;
+        huffCode.clear();
+        return;
+    }
+
+    unordered_map<char,int> freq;
+    for (char c : corpus) freq[c]++;
+
+    priority_queue<HuffNode*, vector<HuffNode*>, HuffCmp> pq;
+    for (auto &p : freq) {
+        pq.push(new HuffNode(p.first, p.second));
+    }
+
+    while (pq.size() > 1) {
+        HuffNode* a = pq.top(); pq.pop();
+        HuffNode* b = pq.top(); pq.pop();
+        HuffNode* merged = new HuffNode('\0', a->freq + b->freq);
+        merged->left = a;
+        merged->right = b;
+        pq.push(merged);
+    }
+
+    huffRoot = pq.top();
+    huffCode.clear();
+    buildCodeTable(huffRoot, "");
+}
+
+string huffmanEncode(const string &text) {
+    if (!huffRoot || huffCode.empty()) return text; // fallback: no compression
+    string bits;
+    for (char c : text) {
+        auto it = huffCode.find(c);
+        if (it != huffCode.end()) bits += it->second;
+        else bits += c; // fallback for unseen chars
+    }
+    return bits;
+}
+
+string huffmanDecode(const string &bits) {
+    if (!huffRoot || huffCode.empty()) return bits; // fallback
+    string out;
+    HuffNode* curr = huffRoot;
+    for (char b : bits) {
+        if (b == '0') curr = curr->left;
+        else if (b == '1') curr = curr->right;
+        else {
+            // invalid bit -> treat as raw char
+            out += b;
+            curr = huffRoot;
+            continue;
+        }
+
+        if (curr && !curr->left && !curr->right) {
+            out += curr->ch;
+            curr = huffRoot;
+        }
+    }
+    return out;
+}
+
+/* ------------------ TRIE FOR DICTIONARY ------------------ */
+
 class TrieNode {
 public:
     TrieNode* children[26];
     bool wordEnd;
-    char data;
+    string encodedMeaning; // Huffman encoded meaning
 
-    TrieNode(char ch) {
-        data = ch;
-    TrieNode(char ch) {
-        data=ch;
+    TrieNode() {
         wordEnd = false;
-        for (int i = 0; i < 26; i++) {
-            children[i] = nullptr;
-        }
+        encodedMeaning = "";
+        for (int i = 0; i < 26; i++) children[i] = nullptr;
     }
 };
 
@@ -22,402 +111,292 @@ class Trie {
 public:
     TrieNode* root;
 
-    Trie() {
-        root = new TrieNode('\0');
-    }
+    Trie() { root = new TrieNode(); }
 
-    void insertHandler(TrieNode* node, const string& word, int i) {
-        if (i == word.size()) {
+    void insertHandler(TrieNode* node, const string &word, int i, const string &meaning) {
+        if (i == (int)word.size()) {
             node->wordEnd = true;
+            node->encodedMeaning = huffmanEncode(meaning);
             return;
         }
-        int index = word[i] - 'a';
-        TrieNode* child;
-        if (node->children[index] != nullptr) {
-            child = node->children[index];
-        } else {
-            child = new TrieNode(word[i]);
-            node->children[index] = child;
-        }
-        insertHandler(child, word, i + 1);
+        int idx = word[i] - 'a';
+        if (idx < 0 || idx >= 26) return;
+        if (!node->children[idx]) node->children[idx] = new TrieNode();
+        insertHandler(node->children[idx], word, i + 1, meaning);
     }
 
-    void insert(const string& word) {
-        insertHandler(root, word, 0);
+    void insert(const string &word, const string &meaning) {
+        if (word.empty()) return;
+        insertHandler(root, word, 0, meaning);
     }
 
-    bool searchUtil(TrieNode* node, const string& word, int i) {
-        if (i == word.size()) {
-            return node->wordEnd;
-        }
-        int index = word[i] - 'a';
-        TrieNode* child;
-        if (node->children[index] != nullptr) {
-            child = node->children[index];
-        } else {
+    bool searchHandler(TrieNode* node, const string &word, int i) {
+        if (!node) return false;
+        if (i == (int)word.size()) {
+            if (node->wordEnd) {
+                string meaning = huffmanDecode(node->encodedMeaning);
+                cout << "Meaning: " << meaning << endl;
+                return true;
+            }
             return false;
         }
-        return searchUtil(child, word, i + 1);
+        int idx = word[i] - 'a';
+        if (idx < 0 || idx >= 26) return false;
+        return searchHandler(node->children[idx], word, i + 1);
     }
 
-    bool search(const string& word) {
-        return searchUtil(root, word, 0);
+    bool search(const string &word) {
+        return searchHandler(root, word, 0);
     }
 
     bool isEmpty(TrieNode* node) {
-        for (int i = 0; i < 26; i++) {
-            if (node->children[i] != nullptr) return false;
-        }
+        for (int i = 0; i < 26; i++)
+            if (node->children[i]) return false;
         return true;
     }
 
-    bool deleteUtil(TrieNode* node, const string& word, int i) {
-        if (i == word.size()) {
+    bool deleteHandler(TrieNode* node, const string &word, int i) {
+        if (!node) return false;
+        if (i == (int)word.size()) {
             if (!node->wordEnd) return false;
             node->wordEnd = false;
+            node->encodedMeaning.clear();
+            return isEmpty(node);
+        }
+        int idx = word[i] - 'a';
+        if (idx < 0 || idx >= 26 || !node->children[idx]) return false;
+
+        bool shouldDeleteChild = deleteHandler(node->children[idx], word, i + 1);
+        if (shouldDeleteChild) {
+            delete node->children[idx];
+            node->children[idx] = nullptr;
+            return !node->wordEnd && isEmpty(node);
+        }
+        return false;
+    }
+
+    void deleteWord(const string &word) {
+        if (deleteHandler(root, word, 0))
+            cout << "Deleted the entire word!" << endl;
+        else
+            cout << "Word not found!" << endl;
+    }
+
+    bool updateHandler(TrieNode* node, const string &word, int i, const string &newMeaning) {
+        if (!node) return false;
+        if (i == (int)word.size()) {
+            if (!node->wordEnd) return false;
+            node->encodedMeaning = huffmanEncode(newMeaning);
             return true;
         }
-        int index = word[i] - 'a';
-        TrieNode* child = node->children[index];
-        if (!child) return false;
-        bool deleted = deleteUtil(child, word, i + 1);
-        if (deleted && !child->wordEnd && isEmpty(child)) {
-            delete child;
-            node->children[index] = nullptr;
-        }
-        return deleted;
+        int idx = word[i] - 'a';
+        if (idx < 0 || idx >= 26 || !node->children[idx]) return false;
+        return updateHandler(node->children[idx], word, i + 1, newMeaning);
     }
 
-    bool deleteWord(const string& word) {
-        return deleteUtil(root, word, 0);
-    }
-};
-
-struct HuffNode {
-    char ch;
-    int freq;
-    HuffNode* left;
-    HuffNode* right;
-
-    HuffNode(char c, int f) {
-        ch = c;
-        freq = f;
-        left = nullptr;
-        right = nullptr;
+    bool update(const string &word, const string &newMeaning) {
+        return updateHandler(root, word, 0, newMeaning);
     }
 
-    HuffNode(int f, HuffNode* l, HuffNode* r) {
-        ch = '\0';
-        freq = f;
-        left = l;
-        right = r;
-    }
-};
-
-struct HuffCompare {
-    bool operator()(HuffNode* a, HuffNode* b) {
-        return a->freq > b->freq;
-    }
-};
-
-class Huffman {
-public:
-    HuffNode* root;
-    unordered_map<char,string> codes;
-
-    Huffman() {
-        root = nullptr;
-    }
-
-    void build(const string& text) {
-        if (text.empty()) {
-            root = nullptr;
-            codes.clear();
-            return;
-        }
-
-        unordered_map<char,int> freq;
-        for (char c : text) {
-            freq[c]++;
-        }
-
-        priority_queue<HuffNode*, vector<HuffNode*>, HuffCompare> pq;
-        for (auto &p : freq) {
-            pq.push(new HuffNode(p.first, p.second));
-        }
-
-        if (pq.size() == 1) {
-            HuffNode* only = pq.top();
-            pq.pop();
-            root = new HuffNode(only->freq, only, nullptr);
-        } else {
-            while (pq.size() > 1) {
-                HuffNode* left = pq.top();
-                pq.pop();
-                HuffNode* right = pq.top();
-                pq.pop();
-                HuffNode* merged = new HuffNode(left->freq + right->freq, left, right);
-                pq.push(merged);
-            }
-            root = pq.top();
-        }
-
-        codes.clear();
-        buildCodes(root, "");
-    }
-
-    string encode(const string& text) {
-        string ans;
-        for (char c : text) {
-            if (codes.count(c)) {
-                ans += codes[c];
-            }
-        }
-        return ans;
-    }
-
-    string decode(const string& bits) {
-        if (!root) return "";
-        string ans;
-        HuffNode* node = root;
-        for (char b : bits) {
-            if (b == '0' && node->left) {
-                node = node->left;
-            } else if (b == '1' && node->right) {
-                node = node->right;
-            }
-            if (node && !node->left && !node->right) {
-                ans += node->ch;
-                node = root;
-            }
-        }
-        return ans;
-    }
-
-private:
-    void buildCodes(HuffNode* node, string path) {
+    void printAllWordsHandler(TrieNode* node, string current) {
         if (!node) return;
-        if (!node->left && !node->right) {
-            if (path.empty()) {
-                codes[node->ch] = "0";
-            } else {
-                codes[node->ch] = path;
+        if (node->wordEnd) {
+            cout << current << " : " << huffmanDecode(node->encodedMeaning) << endl;
+        }
+        for (int i = 0; i < 26; i++) {
+            if (node->children[i]) {
+                printAllWordsHandler(node->children[i], current + char('a' + i));
             }
+        }
+    }
+
+    void printAllWords() {
+        printAllWordsHandler(root, "");
+    }
+
+    void printWordsStartingWith(char ch) {
+        if (ch < 'a' || ch > 'z') {
+            cout << "Invalid starting letter." << endl;
             return;
         }
-        buildCodes(node->left, path + "0");
-        buildCodes(node->right, path + "1");
+        int idx = ch - 'a';
+        TrieNode* child = root->children[idx];
+        if (!child) {
+            cout << "No words starting with " << ch << endl;
+            return;
+        }
+        printAllWordsHandler(child, string(1, ch));
     }
 };
+
+/* ------------------ FILE HANDLING (a.txt, b.txt, ...) ------------------ */
+
+struct FileNode {
+    char ch;
+    string filename;
+    FileNode* next;
+    FileNode(char c) : ch(c), filename(string(1, c) + ".txt"), next(nullptr) {}
+};
+
+FileNode* createFileList() {
+    FileNode* head = new FileNode('a');
+    FileNode* temp = head;
+    for (char c = 'b'; c <= 'z'; c++) {
+        temp->next = new FileNode(c);
+        temp = temp->next;
+    }
+    return head;
+}
+
+string getFile(char c, FileNode* head) {
+    c = tolower(c);
+    FileNode* temp = head;
+    while (temp) {
+        if (temp->ch == c) return temp->filename;
+        temp = temp->next;
+    }
+    return "";
+}
+
+void saveToFile(const string &word, const string &meaning, FileNode* head) {
+    if (word.empty()) return;
+    string fname = getFile(word[0], head);
+    if (fname.empty()) return;
+    ofstream fout(fname, ios::app);
+    fout << word << " - " << meaning << endl;
+    fout.close();
+}
+
+void loadFilesToTrie(Trie &t, FileNode* head, string &corpus) {
+    FileNode* temp = head;
+    while (temp) {
+        ifstream fin(temp->filename);
+        if (!fin) {
+            temp = temp->next;
+            continue;
+        }
+        string line;
+        while (getline(fin, line)) {
+            int bar = line.find(" - ");
+            if (bar == -1) continue;
+            string word = line.substr(0, bar);
+            string meaning = line.substr(bar + 3);
+
+            // normalize to lowercase
+            for (char &c : word) c = tolower(c);
+
+            if (!word.empty()) {
+                t.insert(word, meaning);  // will be encoded later, after Huffman build
+                corpus += meaning;
+            }
+        }
+        fin.close();
+        temp = temp->next;
+    }
+}
+
+/* ------------------ MAIN ------------------ */
 
 int main() {
     Trie t;
-    Huffman h;
+    FileNode* fHead = createFileList();
+    string corpus;
 
-    vector<pair<string,string>> entries;
-    unordered_map<string,string> compressedMeaning;
+    // First pass: load meanings to build Huffman corpus
+    loadFilesToTrie(t, fHead, corpus);
 
-    auto rebuildHuffman = [&]() {
-        string allText;
-        for (auto &p : entries) {
-            allText += p.second;
-        }
-        h.build(allText);
-        compressedMeaning.clear();
-        for (auto &p : entries) {
-            compressedMeaning[p.first] = h.encode(p.second);
-        }
-    };
+    // Build Huffman codes from all meanings
+    buildHuffman(corpus);
 
-    int running = 1;
+    // Reload files so that Trie actually stores encoded meanings
+    // (simple way: clear Trie and insert again with encoding)
+    Trie encodedTrie;
+    corpus.clear();
+    loadFilesToTrie(encodedTrie, fHead, corpus);
+    t = encodedTrie; // shallow copy is fine here since we aren't managing custom pointers extensively
+
+    int running = 1, choice;
+    string word, meaning;
+    char ch;
+
+    cout << "Welcome to the Dictionary Application (Trie + Huffman)" << endl;
+    cout << "Note: All words should be in lowercase letters." << endl;
+
     while (running) {
-        cout << "Enter your choice\n";
-        cout << "1. Add a word with meaning\n";
-        cout << "2. Search a word and show meaning\n";
-        cout << "3. Delete a word\n";
-        cout << "4. Show all words\n";
-        cout << "5. Exit\n";
-
-        int choice;
+        cout << "\nEnter your choice" << endl;
+        cout << "1. Add a word" << endl;
+        cout << "2. Search a word" << endl;
+        cout << "3. Update a word meaning" << endl;
+        cout << "4. Show words starting from a letter" << endl;
+        cout << "5. Show all words" << endl;
+        cout << "6. Delete a word" << endl;
+        cout << "7. Exit" << endl;
+        cout << "Choice: ";
         cin >> choice;
 
-        if (choice == 1) {
-            string word;
-            string meaning;
-            cout << "Enter word (lowercase): ";
+        switch (choice) {
+        case 1:
+            cout << "Enter word to insert: ";
             cin >> word;
-            cout << "Enter meaning (single line, no spaces -> or use _ instead of space): ";
-            cin >> meaning;
+            for (char &c : word) c = tolower(c);
+            cout << "Enter meaning: ";
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            getline(cin, meaning);
+            t.insert(word, meaning);
+            saveToFile(word, meaning, fHead);
+            cout << "Word inserted." << endl;
+            break;
 
-            entries.push_back({word, meaning});
-            t.insert(word);
-            rebuildHuffman();
-            cout << "Word added\n";
-        } else if (choice == 2) {
-            string word;
+        case 2:
             cout << "Enter word to search: ";
             cin >> word;
-            if (!t.search(word)) {
-                cout << "Word not found\n";
+            for (char &c : word) c = tolower(c);
+            if (!t.search(word)) cout << "Word not found" << endl;
+            break;
+
+        case 3:
+            cout << "Enter word to update: ";
+            cin >> word;
+            for (char &c : word) c = tolower(c);
+            cout << "Enter updated meaning: ";
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            getline(cin, meaning);
+            if (t.update(word, meaning)) {
+                // For simplicity, we only update in Trie, not rewriting file.
+                cout << "Updated in Trie (file update can be added separately)." << endl;
             } else {
-                string bits = compressedMeaning[word];
-                string decoded = h.decode(bits);
-                cout << "Compressed meaning: " << bits << "\n";
-                cout << "Decoded meaning: " << decoded << "\n";
+                cout << "Word not found in Trie." << endl;
             }
-        } else if (choice == 3) {
-            string word;
+            break;
+
+        case 4:
+            cout << "Enter starting letter: ";
+            cin >> ch;
+            ch = tolower(ch);
+            t.printWordsStartingWith(ch);
+            break;
+
+        case 5:
+            t.printAllWords();
+            break;
+
+        case 6:
             cout << "Enter word to delete: ";
             cin >> word;
-            if (!t.search(word)) {
-                cout << "Word not found\n";
-            } else {
-                bool ok = t.deleteWord(word);
-                if (ok) {
-                    vector<pair<string,string>> temp;
-                    for (auto &p : entries) {
-                        if (p.first != word) temp.push_back(p);
-                    }
-                    entries.swap(temp);
-                    rebuildHuffman();
-                    cout << "Deleted the entire word\n";
-                } else {
-                    cout << "Delete failed\n";
-                }
-            }
-        } else if (choice == 4) {
-            cout << "Words in dictionary:\n";
-            for (auto &p : entries) {
-                cout << p.first << "\n";
-            }
-        } else if (choice == 5) {
+            for (char &c : word) c = tolower(c);
+            t.deleteWord(word);
+            // File deletion sync is possible but omitted for brevity
+            break;
+
+        case 7:
             running = 0;
-            cout << "Exited\n";
-        } else {
-            cout << "Invalid choice\n";
+            cout << "Exited." << endl;
+            break;
+
+        default:
+            cout << "Invalid choice" << endl;
         }
     }
 
     return 0;
-public: 
-  TrieNode* root;
-
-  Trie() {
-      root = new TrieNode('\0');
-  }
-
-  void insertHandler(TrieNode* node, string word, int i) {      
-    if (i == word.size()) {
-      node->wordEnd = true;
-      return;
-    }       
-    int index = word[i] - 'a';
-    TrieNode* child;
-    if (node->children[index] != NULL) {
-      child = node->children[index];
-    }
-    else {
-      child = new TrieNode(word[i]);
-      node->children[index] = child;
-    }
-    insertHandler(child, word, i + 1);
-  }
-
-  void insert(string word) {
-    insertHandler(root, word, 0);
-  }
-
-  bool searchUtil(TrieNode* node, string word, int i) {
-    if (i == word.size()) {
-        return node->wordEnd;
-    }
-    int index = word[i] - 'a';
-    TrieNode* child;
-    if (node->children[index] != NULL) {
-        child = node->children[index];
-    }
-    else {
-        return false;
-    }
-    return searchUtil(child, word, i + 1);
-  }
-
-  bool search(string word) {
-    return searchUtil(root, word,0);
-  }
-
-  bool isEmpty(TrieNode* node) {
-    for (int i = 0; i < 26; i++)
-        if (node->children[i] != nullptr)
-            return false;
-    return true;
-  }
-
-  bool deleteUtil(TrieNode* node, string &word, int i) {
-    if (i == word.size()) {
-        if (!node->wordEnd) return false;
-        node->wordEnd = false;           
-        return true;
-    }
-    int index = word[i] - 'a';
-    TrieNode* child = node->children[index];
-    if (!child) return false; 
-    bool deleted = deleteUtil(child, word, i + 1);
-    if (deleted && !child->wordEnd && isEmpty(child)) {
-        delete child;
-        node->children[index] = nullptr;
-    }
-    return deleted;
-  }
-
-  void deleteWord(string word) {
-    if (deleteUtil(root, word, 0))
-        cout << "Deleted the entire word!" << endl;
-    else
-        cout << "Word not found!" << endl;
-  }
-
-};
-
-int main(){
-  Trie* t = new Trie();
-  int running = 1;
-  int choice;
-  while (running){
-    cout <<"Enter your choice"<<endl;
-    cout <<"1. Add a word"<<endl;
-    cout <<"2. Search a word"<<endl;
-    cout <<"3. delete a word"<<endl;
-    cout <<"4. Show words starting from a letter"<<endl;
-    cout <<"5. Show all words"<<endl;
-    cout <<"6. Exit"<<endl;
-    cin>> choice;
-    switch(choice){
-      case 1:
-        t->insert("hello");
-        break;
-      case 2:
-        if(t->search("hello")){
-          cout <<"Word found"<<endl;
-        } else {
-          cout <<"Word not found"<<endl;
-        }
-        break;
-      case 3:
-        t->deleteWord("hello");
-        break;
-      case 4:
-        cout <<"Showing words starting from a letter";
-        break;
-      case 5:
-        cout <<"Showing all words";
-        break;
-      case 6:
-        running = 0;
-        cout <<"Exited"<<endl;
-        break;
-      default:
-        cout <<"Invalid choice"<<endl;
-    }
-  }
 }
