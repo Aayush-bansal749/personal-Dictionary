@@ -1,0 +1,10 @@
+Time - Ongoing sequence of events.
+Thing - An object.
+Take - To get or receive.
+Think - Use your mind.
+Talk - Speak words.
+Try - Attempt something.
+Turn - Rotate or change direction.
+Team - Group working together.
+Table - Furniture with a flat top.
+True - Not false.

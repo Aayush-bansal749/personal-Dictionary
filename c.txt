@@ -1,0 +1,10 @@
+Cat - A small domesticated animal.
+Car - A vehicle with wheels.
+Child - A young human being.
+Come - To move toward.
+Call - To shout or communicate.
+Cold - Having low temperature.
+Change - To make different.
+City - A large human settlement.
+Chair - A seat for one person.
+Color - The appearance of something due to light reflection.

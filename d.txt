@@ -1,0 +1,10 @@
+Day - 24 hours.
+Door - A movable barrier to enter/exit a room.
+Dog - A domesticated animal.
+Dance - To move rhythmically to music.
+Draw - To make a picture.
+Drive - To operate a vehicle.
+Dark - Absence of light.
+Dream - Thoughts during sleep.
+Different - Not the same.
+Dinner - The main meal of the day.
